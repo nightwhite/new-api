@@ -40,6 +40,7 @@ const defaultGlobalSettingInputs = {
   'global.thinking_model_blacklist': '[]',
   'general_setting.ping_interval_enabled': false,
   'general_setting.ping_interval_seconds': 60,
+  ModelParamRules: '{}',
 };
 
 export default function SettingGlobalModel(props) {
@@ -54,6 +55,10 @@ export default function SettingGlobalModel(props) {
     if (key === 'global.thinking_model_blacklist') {
       const text = typeof value === 'string' ? value.trim() : '';
       return text === '' ? '[]' : value;
+    }
+    if (key === 'ModelParamRules') {
+      const text = typeof value === 'string' ? value.trim() : '';
+      return text === '' ? '{}' : value;
     }
     return value;
   };
@@ -104,6 +109,14 @@ export default function SettingGlobalModel(props) {
               value && String(value).trim() !== ''
                 ? JSON.stringify(JSON.parse(value), null, 2)
                 : defaultGlobalSettingInputs[key];
+          } catch (error) {
+            value = defaultGlobalSettingInputs[key];
+          }
+        } else if (key === 'ModelParamRules') {
+          try {
+            value = value && String(value).trim() !== ''
+              ? JSON.stringify(JSON.parse(value), null, 2)
+              : defaultGlobalSettingInputs[key];
           } catch (error) {
             value = defaultGlobalSettingInputs[key];
           }
@@ -174,6 +187,35 @@ export default function SettingGlobalModel(props) {
                     setInputs({
                       ...inputs,
                       'global.thinking_model_blacklist': value,
+                    })
+                  }
+                />
+              </Col>
+            </Row>
+
+            <Row>
+              <Col span={24}>
+                <Form.TextArea
+                  label={t('模型参数规则 (JSON)')}
+                  field={'ModelParamRules'}
+                  placeholder={
+                    '{"sora-2-hd":{"allowed_seconds":[10,15],"default_seconds":15}}'
+                  }
+                  rows={4}
+                  rules={[
+                    {
+                      validator: (rule, value) => {
+                        if (!value || value.trim() === '') return true;
+                        return verifyJSON(value);
+                      },
+                      message: t('不是合法的 JSON 字符串'),
+                    },
+                  ]}
+                  extraText={t('用于秒数/参数校验的可选配置，示例：仅允许10/15秒，非法则回退到default_seconds=15: {"sora-2-hd":{"allowed_seconds":[10,15],"default_seconds":15}, "sora-2":{"allowed_seconds":[10,15],"default_seconds":15}}')}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      ModelParamRules: value,
                     })
                   }
                 />

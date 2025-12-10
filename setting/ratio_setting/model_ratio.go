@@ -2,6 +2,7 @@ package ratio_setting
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -299,6 +300,13 @@ var defaultModelPrice = map[string]float64{
 	"sora-2-pro":                     0.5,
 }
 
+// modelPriceExtra holds optional flags for per-call pricing.
+// Currently only disableSecondMultiplier is supported to avoid seconds-based multiplier for video tasks.
+type modelPriceExtra struct {
+	Price                   float64 `json:"price"`
+	DisableSecondMultiplier bool    `json:"disable_second_multiplier,omitempty"`
+}
+
 var defaultAudioRatio = map[string]float64{
 	"gpt-4o-audio-preview":         16,
 	"gpt-4o-mini-audio-preview":    66.67,
@@ -313,7 +321,20 @@ var defaultAudioCompletionRatio = map[string]float64{
 
 var (
 	modelPriceMap      map[string]float64 = nil
+	// modelPriceDisableSecondMap marks models that should not multiply price by seconds when using per-request pricing.
+	modelPriceDisableSecondMap      map[string]bool = nil
 	modelPriceMapMutex                    = sync.RWMutex{}
+)
+
+// ModelParamRule defines per-model validation hints (e.g., allowed seconds for video tasks).
+type ModelParamRule struct {
+	AllowedSeconds []int `json:"allowed_seconds,omitempty"`
+	DefaultSeconds int   `json:"default_seconds,omitempty"`
+}
+
+var (
+	modelParamRules     map[string]ModelParamRule = nil
+	modelParamRulesLock                     sync.RWMutex
 )
 var (
 	modelRatioMap      map[string]float64 = nil
@@ -337,7 +358,12 @@ func InitRatioSettings() {
 	// Initialize modelPriceMap
 	modelPriceMapMutex.Lock()
 	modelPriceMap = defaultModelPrice
+	modelPriceDisableSecondMap = make(map[string]bool)
 	modelPriceMapMutex.Unlock()
+
+	modelParamRulesLock.Lock()
+	modelParamRules = make(map[string]ModelParamRule)
+	modelParamRulesLock.Unlock()
 
 	// Initialize modelRatioMap
 	modelRatioMapMutex.Lock()
@@ -380,7 +406,17 @@ func ModelPrice2JSONString() string {
 	modelPriceMapMutex.RLock()
 	defer modelPriceMapMutex.RUnlock()
 
-	jsonBytes, err := common.Marshal(modelPriceMap)
+	// Marshal as either plain number (legacy) or object with flags.
+	out := make(map[string]interface{}, len(modelPriceMap))
+	for k, v := range modelPriceMap {
+		if disable, ok := modelPriceDisableSecondMap[k]; ok && disable {
+			out[k] = modelPriceExtra{Price: v, DisableSecondMultiplier: true}
+		} else {
+			out[k] = v
+		}
+	}
+
+	jsonBytes, err := common.Marshal(out)
 	if err != nil {
 		common.SysError("error marshalling model price: " + err.Error())
 	}
@@ -391,11 +427,84 @@ func UpdateModelPriceByJSONString(jsonStr string) error {
 	modelPriceMapMutex.Lock()
 	defer modelPriceMapMutex.Unlock()
 	modelPriceMap = make(map[string]float64)
-	err := json.Unmarshal([]byte(jsonStr), &modelPriceMap)
-	if err == nil {
-		InvalidateExposedDataCache()
+	modelPriceDisableSecondMap = make(map[string]bool)
+
+	// Support legacy map[string]float64 and new map[string]modelPriceExtra or mixed.
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
+		return err
 	}
-	return err
+
+	for k, v := range raw {
+		switch val := v.(type) {
+		case float64:
+			modelPriceMap[k] = val
+		case map[string]interface{}:
+			// expect price and optional disable_second_multiplier
+			if priceVal, ok := val["price"]; ok {
+				if f, ok2 := priceVal.(float64); ok2 {
+					modelPriceMap[k] = f
+				} else {
+					return fmt.Errorf("invalid price for model %s", k)
+				}
+			}
+			if flagVal, ok := val["disable_second_multiplier"]; ok {
+				if b, ok2 := flagVal.(bool); ok2 && b {
+					modelPriceDisableSecondMap[k] = true
+				}
+			}
+		default:
+			return fmt.Errorf("invalid model price entry for %s", k)
+		}
+	}
+
+	InvalidateExposedDataCache()
+	return nil
+}
+
+// ModelParamRules JSON format: { "model-name": {"allowed_seconds":[10,15], "default_seconds":15}, ... }
+func UpdateModelParamRulesByJSONString(jsonStr string) error {
+	modelParamRulesLock.Lock()
+	defer modelParamRulesLock.Unlock()
+
+	tmp := make(map[string]ModelParamRule)
+	if jsonStr != "" {
+		if err := json.Unmarshal([]byte(jsonStr), &tmp); err != nil {
+			return err
+		}
+	}
+	modelParamRules = tmp
+	InvalidateExposedDataCache()
+	return nil
+}
+
+func ModelParamRules2JSONString() string {
+	modelParamRulesLock.RLock()
+	defer modelParamRulesLock.RUnlock()
+	jsonBytes, err := json.Marshal(modelParamRules)
+	if err != nil {
+		common.SysError("error marshalling model param rules: " + err.Error())
+		return "{}"
+	}
+	return string(jsonBytes)
+}
+
+func GetModelParamRule(model string) (ModelParamRule, bool) {
+	modelParamRulesLock.RLock()
+	defer modelParamRulesLock.RUnlock()
+	model = FormatMatchingModelName(model)
+	r, ok := modelParamRules[model]
+	return r, ok
+}
+
+func GetModelParamRulesCopy() map[string]ModelParamRule {
+	modelParamRulesLock.RLock()
+	defer modelParamRulesLock.RUnlock()
+	copyMap := make(map[string]ModelParamRule, len(modelParamRules))
+	for k, v := range modelParamRules {
+		copyMap[k] = v
+	}
+	return copyMap
 }
 
 // GetModelPrice 返回模型的价格，如果模型不存在则返回-1，false
@@ -413,6 +522,31 @@ func GetModelPrice(name string, printErr bool) (float64, bool) {
 		return -1, false
 	}
 	return price, true
+}
+
+// GetModelPriceWithFlags returns price, disableSecondMultiplier, ok.
+func GetModelPriceWithFlags(name string, printErr bool) (float64, bool, bool) {
+	modelPriceMapMutex.RLock()
+	defer modelPriceMapMutex.RUnlock()
+
+	name = FormatMatchingModelName(name)
+
+	price, ok := modelPriceMap[name]
+	if !ok {
+		if printErr {
+			common.SysError("model price not found: " + name)
+		}
+		return -1, false, false
+	}
+	disable := modelPriceDisableSecondMap[name]
+	return price, disable, true
+}
+
+func GetModelPriceDisableSecond(name string) bool {
+	modelPriceMapMutex.RLock()
+	defer modelPriceMapMutex.RUnlock()
+	name = FormatMatchingModelName(name)
+	return modelPriceDisableSecondMap[name]
 }
 
 func UpdateModelRatioByJSONString(jsonStr string) error {
@@ -792,12 +926,17 @@ func GetModelRatioCopy() map[string]float64 {
 	return copyMap
 }
 
-func GetModelPriceCopy() map[string]float64 {
+// GetModelPriceCopy returns a copy with flags preserved (numbers or objects like {price, disable_second_multiplier}).
+func GetModelPriceCopy() map[string]interface{} {
 	modelPriceMapMutex.RLock()
 	defer modelPriceMapMutex.RUnlock()
-	copyMap := make(map[string]float64, len(modelPriceMap))
+	copyMap := make(map[string]interface{}, len(modelPriceMap))
 	for k, v := range modelPriceMap {
-		copyMap[k] = v
+		if disable, ok := modelPriceDisableSecondMap[k]; ok && disable {
+			copyMap[k] = modelPriceExtra{Price: v, DisableSecondMultiplier: true}
+		} else {
+			copyMap[k] = v
+		}
 	}
 	return copyMap
 }

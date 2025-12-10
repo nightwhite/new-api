@@ -58,7 +58,21 @@ export default function ModelSettingsVisualEditor(props) {
 
   useEffect(() => {
     try {
-      const modelPrice = JSON.parse(props.options.ModelPrice || '{}');
+      const rawModelPrice = JSON.parse(props.options.ModelPrice || '{}');
+      const modelPrice = {};
+      const disableSecond = {};
+      Object.entries(rawModelPrice).forEach(([k, v]) => {
+        if (typeof v === 'number') {
+          modelPrice[k] = v;
+        } else if (v && typeof v === 'object') {
+          if (typeof v.price === 'number') {
+            modelPrice[k] = v.price;
+          }
+          if (v.disable_second_multiplier === true) {
+            disableSecond[k] = true;
+          }
+        }
+      });
       const modelRatio = JSON.parse(props.options.ModelRatio || '{}');
       const completionRatio = JSON.parse(props.options.CompletionRatio || '{}');
 
@@ -74,12 +88,14 @@ export default function ModelSettingsVisualEditor(props) {
         const ratio = modelRatio[name] === undefined ? '' : modelRatio[name];
         const comp =
           completionRatio[name] === undefined ? '' : completionRatio[name];
+        const disableSec = disableSecond[name] === true;
 
         return {
           name,
           price,
           ratio,
           completionRatio: comp,
+          disableSecond: disableSec,
           hasConflict: price !== '' && (ratio !== '' || comp !== ''),
         };
       });
@@ -121,8 +137,10 @@ export default function ModelSettingsVisualEditor(props) {
       models.forEach((model) => {
         currentConvertModelName = model.name;
         if (model.price !== '') {
-          // 如果价格不为空，则转换为浮点数，忽略倍率参数
-          output.ModelPrice[model.name] = parseFloat(model.price);
+          // 按次计费，支持禁用秒数倍率
+          const entry = { price: parseFloat(model.price) };
+          if (model.disableSecond) entry.disable_second_multiplier = true;
+          output.ModelPrice[model.name] = entry;
         } else {
           if (model.ratio !== '')
             output.ModelRatio[model.name] = parseFloat(model.ratio);
@@ -197,11 +215,22 @@ export default function ModelSettingsVisualEditor(props) {
       dataIndex: 'price',
       key: 'price',
       render: (text, record) => (
-        <Input
-          value={text}
-          placeholder={t('按量计费')}
-          onChange={(value) => updateModel(record.name, 'price', value)}
-        />
+        <Space align='start'>
+          <Input
+            style={{ width: 140 }}
+            value={text}
+            placeholder={t('按量计费')}
+            onChange={(value) => updateModel(record.name, 'price', value)}
+          />
+          {text !== '' && (
+            <Checkbox
+              checked={record.disableSecond}
+              onChange={(e) => updateModel(record.name, 'disableSecond', e.target.checked)}
+            >
+              {t('禁用秒数倍率')}
+            </Checkbox>
+          )}
+        </Space>
       ),
     },
     {
@@ -253,9 +282,11 @@ export default function ModelSettingsVisualEditor(props) {
   ];
 
   const updateModel = (name, field, value) => {
-    if (isNaN(value)) {
-      showError('请输入数字');
-      return;
+    if (['price', 'ratio', 'completionRatio'].includes(field)) {
+      if (isNaN(value)) {
+        showError('请输入数字');
+        return;
+      }
     }
     setModels((prev) =>
       prev.map((model) => {
@@ -347,6 +378,7 @@ export default function ModelSettingsVisualEditor(props) {
             price: values.price || '',
             ratio: values.ratio || '',
             completionRatio: values.completionRatio || '',
+            disableSecond: values.disableSecond || false,
           };
           updated.hasConflict =
             updated.price !== '' &&
@@ -370,6 +402,7 @@ export default function ModelSettingsVisualEditor(props) {
           price: values.price || '',
           ratio: values.ratio || '',
           completionRatio: values.completionRatio || '',
+          disableSecond: values.disableSecond || false,
         };
         newModel.hasConflict =
           newModel.price !== '' &&
@@ -437,6 +470,7 @@ export default function ModelSettingsVisualEditor(props) {
         // Update the form fields based on pricing mode
         const formValues = {
           name: modelCopy.name,
+          disableSecond: modelCopy.disableSecond || false,
         };
 
         if (initialPricingMode === 'per-request') {
@@ -551,6 +585,9 @@ export default function ModelSettingsVisualEditor(props) {
               valuesToSave.completionRatio = '';
             }
 
+            // ensure disableSecond persisted
+            valuesToSave.disableSecond = Boolean(valuesToSave.disableSecond);
+
             addOrUpdateModel(valuesToSave);
           }
         }}
@@ -585,6 +622,7 @@ export default function ModelSettingsVisualEditor(props) {
                     if (formRef.current) {
                       const formValues = {
                         name: updatedModel.name,
+                        disableSecond: updatedModel.disableSecond || false,
                       };
 
                       if (newMode === 'per-request') {
@@ -737,18 +775,30 @@ export default function ModelSettingsVisualEditor(props) {
           )}
 
           {pricingMode === 'per-request' && (
-            <Form.Input
-              field='priceInput'
-              label={t('固定价格(每次)')}
-              placeholder={t('输入每次价格')}
-              onChange={(value) =>
-                setCurrentModel((prev) => ({
-                  ...(prev || {}),
-                  price: value,
-                }))
-              }
-              initValue={currentModel?.price || ''}
-            />
+            <>
+              <Form.Input
+                field='priceInput'
+                label={t('固定价格(每次)')}
+                placeholder={t('输入每次价格')}
+                onChange={(value) =>
+                  setCurrentModel((prev) => ({
+                    ...(prev || {}),
+                    price: value,
+                  }))
+                }
+                initValue={currentModel?.price || ''}
+              />
+              <Checkbox
+                field='disableSecond'
+                checked={currentModel?.disableSecond || false}
+                onChange={(e) =>
+                  setCurrentModel((prev) => ({ ...(prev || {}), disableSecond: e.target.checked }))
+                }
+                style={{ marginTop: 8 }}
+              >
+                {t('禁用秒数倍率')}
+              </Checkbox>
+            </>
           )}
         </Form>
       </Modal>

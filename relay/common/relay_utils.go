@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
@@ -165,6 +166,26 @@ func ValidateMultipartDirect(c *gin.Context, info *RelayInfo) *dto.TaskError {
 
 		if seconds <= 0 {
 			seconds = 4
+		}
+
+		// Apply model param rules if configured
+		if rule, ok := ratio_setting.GetModelParamRule(model); ok {
+			if len(rule.AllowedSeconds) > 0 {
+				allowed := false
+				for _, v := range rule.AllowedSeconds {
+					if seconds == v {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					if rule.DefaultSeconds > 0 {
+						seconds = rule.DefaultSeconds
+					} else {
+						return createTaskError(fmt.Errorf("seconds is invalid for %s", model), "invalid_seconds", http.StatusBadRequest, true)
+					}
+				}
+			}
 		}
 
 		if model == "sora-2" && !lo.Contains([]string{"720x1280", "1280x720"}, size) {

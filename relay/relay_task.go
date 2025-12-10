@@ -53,7 +53,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.
 	if modelName == "" {
 		modelName = service.CoverTaskActionToModelName(platform, info.Action)
 	}
-	modelPrice, success := ratio_setting.GetModelPrice(modelName, true)
+	modelPrice, disableSecondMultiplier, success := ratio_setting.GetModelPriceWithFlags(modelName, true)
 	if !success {
 		defaultPrice, ok := ratio_setting.GetDefaultModelPriceMap()[modelName]
 		if !ok {
@@ -75,7 +75,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.
 	// FIXME: 临时修补，支持任务仅按次计费
 	if !common.StringsContains(constant.TaskPricePatches, modelName) {
 		if len(info.PriceData.OtherRatios) > 0 {
-			for _, ra := range info.PriceData.OtherRatios {
+			for key, ra := range info.PriceData.OtherRatios {
+				if disableSecondMultiplier && key == "seconds" {
+					continue
+				}
 				if 1.0 != ra {
 					ratio *= ra
 				}

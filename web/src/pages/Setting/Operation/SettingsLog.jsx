@@ -46,6 +46,7 @@ export default function SettingsLog(props) {
   const [loadingCleanHistoryLog, setLoadingCleanHistoryLog] = useState(false);
   const [inputs, setInputs] = useState({
     LogConsumeEnabled: false,
+    ModelParamRules: '{}',
     historyTimestamp: dayjs().subtract(1, 'month').toDate(),
   });
   const refForm = useRef();
@@ -245,6 +246,23 @@ export default function SettingsLog(props) {
                     {t('清除历史日志')}
                   </Button>
                 </Spin>
+              </Col>
+              <Col xs={24}>
+                <Form.TextArea
+                  field={'ModelParamRules'}
+                  label={t('模型参数规则 (JSON)')}
+                  placeholder='{ "sora-2-hd": {"allowed_seconds":[10,15], "default_seconds":15} }'
+                  autosize
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      ModelParamRules: value,
+                    });
+                  }}
+                />
+                <Text type='tertiary' size='small'>
+                  {t('示例：限制秒数，仅允许 10/15，不符合则强制为 default_seconds=15')}
+                </Text>
               </Col>
             </Row>
 
