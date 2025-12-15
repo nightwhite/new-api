@@ -82,7 +82,7 @@
     "Homepage URL 填": "Điền URL trang chủ",
     "ID": "ID",
     "IP": "IP",
-    "IP白名单": "Danh sách trắng IP",
+    "IP白名单（支持CIDR表达式）": "Danh sách trắng IP (hỗ trợ biểu thức CIDR)",
     "IP限制": "Hạn chế IP",
     "IP黑名单": "Danh sách đen IP",
     "JSON": "JSON",
@@ -510,6 +510,7 @@
     "参数值": "Giá trị tham số",
     "参数覆盖": "Ghi đè tham số",
     "参照生视频": "Tạo video tham chiếu",
+    "视频Remix": "Remix video",
     "友情链接": "Liên kết thân thiện",
     "发布日期": "Ngày xuất bản",
     "发布时间": "Thời gian xuất bản",
@@ -1986,7 +1987,7 @@
     "请先阅读并同意用户协议和隐私政策": "Vui lòng đọc và đồng ý với thỏa thuận người dùng và chính sách bảo mật trước",
     "请再次输入新密码": "Vui lòng nhập lại mật khẩu mới",
     "请前往个人设置 → 安全设置进行配置。": "Vui lòng truy cập Cài đặt cá nhân → Cài đặt bảo mật để cấu hình.",
-    "请勿过度信任此功能，IP可能被伪造": "Đừng quá tin tưởng tính năng này, IP có thể bị giả mạo",
+    "请勿过度信任此功能，IP可能被伪造，请配合nginx和cdn等网关使用": "Đừng quá tin tưởng tính năng này, IP có thể bị giả mạo, vui lòng sử dụng cùng với nginx và các cổng khác như cdn",
     "请在系统设置页面编辑分组倍率以添加新的分组：": "Vui lòng chỉnh sửa tỷ lệ nhóm trên trang cài đặt hệ thống để thêm nhóm mới:",
     "请填写完整的管理员账号信息": "Vui lòng điền đầy đủ thông tin tài khoản quản trị viên",
     "请填写密钥": "Vui lòng điền khóa",
@@ -2735,6 +2736,9 @@
     "默认用户消息": "Xin chào",
     "默认助手消息": "Xin chào! Tôi có thể giúp gì cho bạn?",
     "可选，用于复现结果": "Tùy chọn, để tái tạo kết quả",
-    "随机种子 (留空为随机)": "Hạt giống ngẫu nhiên (để trống cho ngẫu nhiên)"
+    "随机种子 (留空为随机)": "Hạt giống ngẫu nhiên (để trống cho ngẫu nhiên)",
+    "跨分组重试": "Thử lại giữa các nhóm",
+    "跨分组": "Giữa các nhóm",
+    "开启后，当前分组渠道失败时会按顺序尝试下一个分组的渠道": "Sau khi bật, khi kênh nhóm hiện tại thất bại, nó sẽ thử kênh của nhóm tiếp theo theo thứ tự"
   }
 }
