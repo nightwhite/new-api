@@ -55,4 +55,7 @@ const (
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 
 	ContextKeySystemPromptOverride ContextKey = "system_prompt_override"
+
+	// preserve original request path before any internal rewrite (e.g., Codex chat -> responses)
+	ContextKeyOriginalPath ContextKey = "original_request_path"
 )

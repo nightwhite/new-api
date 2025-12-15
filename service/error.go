@@ -91,6 +91,11 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 	CloseResponseBodyGracefully(resp)
 	var errResponse dto.GeneralErrorResponse
 
+	// 在调试模式下记录上游返回体，方便排查 4xx/5xx。
+	if common.DebugEnabled {
+		logger.LogError(ctx, fmt.Sprintf("upstream status=%d body=%s", resp.StatusCode, string(responseBody)))
+	}
+
 	err = common.Unmarshal(responseBody, &errResponse)
 	if err != nil {
 		if showBodyWhenFail {

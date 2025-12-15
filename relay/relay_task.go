@@ -43,6 +43,8 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.
 		if strings.TrimSpace(videoID) == "" {
 			return service.TaskErrorWrapperLocal(fmt.Errorf("video_id is required"), "invalid_request", http.StatusBadRequest)
 		}
+		// 兼容前端/客户端把 task_id 以 "model:task_xxx" 形式传入（例如 sora-2:task_...）。
+		// 数据库里可能存的是纯 task_id（task_...），因此这里先保存原值，后续查库时做降级匹配。
 		info.OriginTaskID = videoID
 	}
 
@@ -54,6 +56,21 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.
 		if err != nil {
 			taskErr = service.TaskErrorWrapper(err, "get_origin_task_failed", http.StatusInternalServerError)
 			return
+		}
+		// 降级：如果传入形如 "sora-2:task_xxx"，尝试用最后一段 "task_xxx" 查库
+		if !exist && strings.Contains(info.OriginTaskID, ":") {
+			parts := strings.Split(info.OriginTaskID, ":")
+			fallbackID := strings.TrimSpace(parts[len(parts)-1])
+			if fallbackID != "" && fallbackID != info.OriginTaskID {
+				originTask, exist, err = model.GetByTaskId(info.UserId, fallbackID)
+				if err != nil {
+					taskErr = service.TaskErrorWrapper(err, "get_origin_task_failed", http.StatusInternalServerError)
+					return
+				}
+				if exist {
+					info.OriginTaskID = fallbackID
+				}
+			}
 		}
 		if !exist {
 			taskErr = service.TaskErrorWrapperLocal(errors.New("task_origin_not_exist"), "task_not_exist", http.StatusBadRequest)

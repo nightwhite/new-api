@@ -570,6 +570,27 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 		}
 		request.Model = originModel
 	}
+
+	// Some "responses-only" upstreams accept the OpenAI `input` field but only in the
+	// structured message format (array of {type:"message", ...}), and reject a plain string.
+	// Normalize string input to the message format to keep both styles working.
+	if request.Input != nil && common.GetJsonType(request.Input) == "string" {
+		var s string
+		_ = common.Unmarshal(request.Input, &s)
+		inputs := []map[string]any{
+			{
+				"type": "message",
+				"role": "user",
+				"content": []map[string]any{
+					{"type": "input_text", "text": s},
+				},
+			},
+		}
+		if b, err := common.Marshal(inputs); err == nil {
+			request.Input = b
+		}
+	}
+
 	return request, nil
 }
 

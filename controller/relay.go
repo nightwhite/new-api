@@ -108,6 +108,29 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	// 若通道类型为 Codex，强制将文本接口转换为 responses 端点
+	channelType := common.GetContextKeyInt(c, constant.ContextKeyChannelType)
+	// 记录用户原始请求 path，供下游判断是否需要保持 chat/completions 兼容输出
+	c.Set(string(constant.ContextKeyOriginalPath), c.Request.URL.Path)
+	if channelType == constant.ChannelTypeCodex && relayFormat == types.RelayFormatOpenAI {
+		if generalReq, ok := request.(*dto.GeneralOpenAIRequest); ok {
+			respReq, convertErr := helper.GeneralToResponses(generalReq)
+			if convertErr != nil {
+				newAPIError = types.NewError(convertErr, types.ErrorCodeInvalidRequest)
+				return
+			}
+			request = respReq
+			relayFormat = types.RelayFormatOpenAIResponses
+			c.Set("relay_mode", relayconstant.RelayModeResponses)
+			c.Request.URL.Path = "/v1/responses"
+			if c.Request.URL.RawQuery != "" {
+				c.Request.RequestURI = "/v1/responses?" + c.Request.URL.RawQuery
+			} else {
+				c.Request.RequestURI = "/v1/responses"
+			}
+		}
+	}
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)

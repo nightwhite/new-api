@@ -77,6 +77,11 @@ func testChannel(channel *model.Channel, testModel string, endpointType string) 
 
 	requestPath := "/v1/chat/completions"
 
+	// Codex 渠道默认使用 /v1/responses
+	if endpointType == "" && channel.Type == constant.ChannelTypeCodex {
+		endpointType = string(constant.EndpointTypeOpenAIResponse)
+	}
+
 	// 如果指定了端点类型，使用指定的端点类型
 	if endpointType != "" {
 		if endpointInfo, ok := common.GetDefaultEndpointInfo(constant.EndpointType(endpointType)); ok {

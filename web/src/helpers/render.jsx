@@ -368,6 +368,8 @@ export function getChannelIcon(channelType) {
       return <Doubao.Color size={iconSize} />;
     case 56: // Replicate
       return <Replicate size={iconSize} />;
+    case 57: // Codex
+      return <OpenAI size={iconSize} />;
     case 8: // 自定义渠道
     case 22: // 知识库：FastGPT
       return <FastGPT.Color size={iconSize} />;
@@ -567,7 +569,12 @@ export const modelColorMap = {
   'claude-2.1': 'rgb(255,209,190)', // 浅橙色（略有区别）
 };
 
-export function modelToColor(modelName) {
+export function modelToColor(modelNameInput) {
+  const modelName =
+    typeof modelNameInput === 'string' && modelNameInput.length > 0
+      ? modelNameInput
+      : String(modelNameInput ?? 'default');
+
   // 1. 如果模型在预定义的 modelColorMap 中，使用预定义颜色
   if (modelColorMap[modelName]) {
     return modelColorMap[modelName];
@@ -589,11 +596,20 @@ export function modelToColor(modelName) {
   return colorPalette[index];
 }
 
-export function stringToColor(str) {
+export function stringToColor(input) {
+  const normalized =
+    typeof input === 'string'
+      ? input
+      : input == null
+        ? ''
+        : String(input);
+  const target = normalized.length > 0 ? normalized : 'default';
+
   let sum = 0;
-  for (let i = 0; i < str.length; i++) {
-    sum += str.charCodeAt(i);
+  for (let i = 0; i < target.length; i++) {
+    sum += target.charCodeAt(i);
   }
+
   let i = sum % colors.length;
   return colors[i];
 }

@@ -204,9 +204,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 			ticker.Reset(streamingTimeout)
 			data := scanner.Text()
-			if common.DebugEnabled {
-				println(data)
-			}
+			// Avoid per-chunk logging to keep logs small even when debug enabled.
 
 			if len(data) < 6 {
 				continue
