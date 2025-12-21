@@ -5,6 +5,7 @@ type RelayFormat string
 const (
 	RelayFormatOpenAI          RelayFormat = "openai"
 	RelayFormatClaude                      = "claude"
+	RelayFormatClaudeCountTokens           = "claude_count_tokens"
 	RelayFormatGemini                      = "gemini"
 	RelayFormatOpenAIResponses             = "openai_responses"
 	RelayFormatOpenAIAudio                 = "openai_audio"

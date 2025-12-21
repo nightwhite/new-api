@@ -90,7 +90,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				helper.WssError(c, ws, newAPIError.ToOpenAIError())
-			case types.RelayFormatClaude:
+			case types.RelayFormatClaude, types.RelayFormatClaudeCountTokens:
 				c.JSON(newAPIError.StatusCode, gin.H{
 					"type":  "error",
 					"error": newAPIError.ToClaudeError(),
@@ -145,15 +145,18 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
+	isCountTokensRequest := relayFormat == types.RelayFormatClaudeCountTokens
+
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
+	// Also skip for count_tokens requests
 	var meta *types.TokenCountMeta
-	if needSensitiveCheck || needCountToken {
+	if !isCountTokensRequest && (needSensitiveCheck || needCountToken) {
 		meta = request.GetTokenCountMeta()
 	} else {
 		meta = fastTokenCountMetaForPricing(request)
 	}
 
-	if needSensitiveCheck && meta != nil {
+	if !isCountTokensRequest && needSensitiveCheck && meta != nil {
 		contains, words := service.CheckSensitiveText(meta.CombineText)
 		if contains {
 			logger.LogWarn(c, fmt.Sprintf("user sensitive words detected: %s", strings.Join(words, ", ")))
@@ -162,37 +165,42 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
-	tokens, err := service.EstimateRequestToken(c, meta, relayInfo)
-	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeCountTokenFailed)
-		return
-	}
-
-	relayInfo.SetEstimatePromptTokens(tokens)
-
-	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
-	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError)
-		return
-	}
-
-	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
-
-	if priceData.FreeModel {
-		logger.LogInfo(c, fmt.Sprintf("模型 %s 免费，跳过预扣费", relayInfo.OriginModelName))
-	} else {
-		newAPIError = service.PreConsumeQuota(c, priceData.QuotaToPreConsume, relayInfo)
-		if newAPIError != nil {
+	tokens := 0
+	if !isCountTokensRequest {
+		tokens, err = service.EstimateRequestToken(c, meta, relayInfo)
+		if err != nil {
+			newAPIError = types.NewError(err, types.ErrorCodeCountTokenFailed)
 			return
 		}
 	}
 
-	defer func() {
-		// Only return quota if downstream failed and quota was actually pre-consumed
-		if newAPIError != nil && relayInfo.FinalPreConsumedQuota != 0 {
-			service.ReturnPreConsumedQuota(c, relayInfo)
+	relayInfo.SetEstimatePromptTokens(tokens)
+
+	if !isCountTokensRequest {
+		priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
+		if err != nil {
+			newAPIError = types.NewError(err, types.ErrorCodeModelPriceError)
+			return
 		}
-	}()
+
+		// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
+
+		if priceData.FreeModel {
+			logger.LogInfo(c, fmt.Sprintf("模型 %s 免费，跳过预扣费", relayInfo.OriginModelName))
+		} else {
+			newAPIError = service.PreConsumeQuota(c, priceData.QuotaToPreConsume, relayInfo)
+			if newAPIError != nil {
+				return
+			}
+		}
+
+		defer func() {
+			// Only return quota if downstream failed and quota was actually pre-consumed
+			if newAPIError != nil && relayInfo.FinalPreConsumedQuota != 0 {
+				service.ReturnPreConsumedQuota(c, relayInfo)
+			}
+		}()
+	}
 
 	retryParam := &service.RetryParam{
 		Ctx:        c,
@@ -225,7 +233,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		switch relayFormat {
 		case types.RelayFormatOpenAIRealtime:
 			newAPIError = relay.WssHelper(c, relayInfo)
-		case types.RelayFormatClaude:
+		case types.RelayFormatClaude, types.RelayFormatClaudeCountTokens:
 			newAPIError = relay.ClaudeHelper(c, relayInfo)
 		case types.RelayFormatGemini:
 			newAPIError = geminiRelayHandler(c, relayInfo)

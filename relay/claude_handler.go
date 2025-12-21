@@ -29,6 +29,11 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return types.NewErrorWithStatusCode(fmt.Errorf("invalid request type, expected *dto.ClaudeRequest, got %T", info.Request), types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
 
+	// Handle count_tokens requests specially
+	if info.RelayFormat == types.RelayFormatClaudeCountTokens {
+		return handleCountTokens(c, info, claudeReq)
+	}
+
 	request, err := common.DeepCopy(claudeReq)
 	if err != nil {
 		return types.NewError(fmt.Errorf("failed to copy request to ClaudeRequest: %w", err), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
@@ -162,5 +167,25 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 	}
 
 	service.PostClaudeConsumeQuota(c, info, usage.(*dto.Usage))
+	return nil
+}
+
+// handleCountTokens handles the count_tokens request
+func handleCountTokens(c *gin.Context, info *relaycommon.RelayInfo, claudeReq *dto.ClaudeRequest) *types.NewAPIError {
+	// Get token count meta from the request
+	meta := claudeReq.GetTokenCountMeta()
+
+	// Count tokens using the token counter service
+	tokens, err := service.EstimateRequestToken(c, meta, info)
+	if err != nil {
+		return types.NewError(err, types.ErrorCodeCountTokenFailed, types.ErrOptionWithSkipRetry())
+	}
+
+	// Return the token count response in Claude's format
+	response := map[string]interface{}{
+		"input_tokens": tokens,
+	}
+
+	c.JSON(http.StatusOK, response)
 	return nil
 }
