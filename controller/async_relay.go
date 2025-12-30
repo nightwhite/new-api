@@ -39,32 +39,32 @@ type asyncRelayTaskContext struct {
 	TokenModelLimitOn  bool
 	TokenModelLimitMap map[string]bool
 
-	UsingGroup string
-	UserGroup  string
-	UserQuota  int
-	UserEmail  string
+	UsingGroup  string
+	UserGroup   string
+	UserQuota   int
+	UserEmail   string
 	UserSetting dto.UserSetting
 
-	ChannelId            int
-	ChannelType          int
-	ChannelName          string
-	ChannelCreateTime    int64
-	ChannelBaseUrl       string
-	ChannelKey           string
-	ChannelOrganization  string
-	ChannelSetting       dto.ChannelSettings
-	ChannelOtherSetting  dto.ChannelOtherSettings
-	ChannelParamOverride map[string]any
+	ChannelId             int
+	ChannelType           int
+	ChannelName           string
+	ChannelCreateTime     int64
+	ChannelBaseUrl        string
+	ChannelKey            string
+	ChannelOrganization   string
+	ChannelSetting        dto.ChannelSettings
+	ChannelOtherSetting   dto.ChannelOtherSettings
+	ChannelParamOverride  map[string]any
 	ChannelHeaderOverride map[string]any
-	ChannelAutoBan       bool
-	ChannelModelMapping  string
-	StatusCodeMapping    string
-	ChannelIsMultiKey    bool
-	ChannelMultiKeyIndex int
-	ApiVersion           string
-	Region               string
-	Plugin               string
-	BotId                string
+	ChannelAutoBan        bool
+	ChannelModelMapping   string
+	StatusCodeMapping     string
+	ChannelIsMultiKey     bool
+	ChannelMultiKeyIndex  int
+	ApiVersion            string
+	Region                string
+	Plugin                string
+	BotId                 string
 
 	OriginalModel  string
 	RequestHeaders http.Header
@@ -169,6 +169,11 @@ func createAsyncRelayTask(c *gin.Context, spec asyncRelayTaskSpec) {
 		Status:     model.TaskStatusQueued,
 		SubmitTime: now,
 		Progress:   "0%",
+		Properties: model.Properties{
+			OriginModelName: originalModel,
+			RequestPath:     spec.TargetPath,
+			Input:           extractInputForTask(spec, requestBody),
+		},
 	}
 
 	if err := task.Insert(); err != nil {
@@ -177,30 +182,30 @@ func createAsyncRelayTask(c *gin.Context, spec asyncRelayTaskSpec) {
 	}
 
 	ctxSnapshot := asyncRelayTaskContext{
-		UserId:              userId,
-		UserName:            common.GetContextKeyString(c, constant.ContextKeyUserName),
-		TokenId:             c.GetInt("token_id"),
-		TokenKey:            c.GetString("token_key"),
-		TokenName:           c.GetString("token_name"),
-		TokenUnlimited:      c.GetBool("token_unlimited_quota"),
-		TokenQuota:          c.GetInt("token_quota"),
-		TokenGroup:          common.GetContextKeyString(c, constant.ContextKeyTokenGroup),
-		TokenCrossGroup:     common.GetContextKeyBool(c, constant.ContextKeyTokenCrossGroupRetry),
-		TokenModelLimitOn:   c.GetBool("token_model_limit_enabled"),
-		TokenModelLimitMap:  getTokenModelLimitMap(c),
-		UsingGroup:          usingGroup,
-		UserGroup:           common.GetContextKeyString(c, constant.ContextKeyUserGroup),
-		UserQuota:           common.GetContextKeyInt(c, constant.ContextKeyUserQuota),
-		UserEmail:           common.GetContextKeyString(c, constant.ContextKeyUserEmail),
-		UserSetting:         userSetting,
-		ChannelId:           channelId,
-		ChannelType:         common.GetContextKeyInt(c, constant.ContextKeyChannelType),
-		ChannelName:         common.GetContextKeyString(c, constant.ContextKeyChannelName),
-		ChannelCreateTime:   c.GetInt64(string(constant.ContextKeyChannelCreateTime)),
-		ChannelBaseUrl:      common.GetContextKeyString(c, constant.ContextKeyChannelBaseUrl),
-		ChannelKey:          common.GetContextKeyString(c, constant.ContextKeyChannelKey),
-		ChannelOrganization: common.GetContextKeyString(c, constant.ContextKeyChannelOrganization),
-		ChannelParamOverride: common.GetContextKeyStringMap(c, constant.ContextKeyChannelParamOverride),
+		UserId:                userId,
+		UserName:              common.GetContextKeyString(c, constant.ContextKeyUserName),
+		TokenId:               c.GetInt("token_id"),
+		TokenKey:              c.GetString("token_key"),
+		TokenName:             c.GetString("token_name"),
+		TokenUnlimited:        c.GetBool("token_unlimited_quota"),
+		TokenQuota:            c.GetInt("token_quota"),
+		TokenGroup:            common.GetContextKeyString(c, constant.ContextKeyTokenGroup),
+		TokenCrossGroup:       common.GetContextKeyBool(c, constant.ContextKeyTokenCrossGroupRetry),
+		TokenModelLimitOn:     c.GetBool("token_model_limit_enabled"),
+		TokenModelLimitMap:    getTokenModelLimitMap(c),
+		UsingGroup:            usingGroup,
+		UserGroup:             common.GetContextKeyString(c, constant.ContextKeyUserGroup),
+		UserQuota:             common.GetContextKeyInt(c, constant.ContextKeyUserQuota),
+		UserEmail:             common.GetContextKeyString(c, constant.ContextKeyUserEmail),
+		UserSetting:           userSetting,
+		ChannelId:             channelId,
+		ChannelType:           common.GetContextKeyInt(c, constant.ContextKeyChannelType),
+		ChannelName:           common.GetContextKeyString(c, constant.ContextKeyChannelName),
+		ChannelCreateTime:     c.GetInt64(string(constant.ContextKeyChannelCreateTime)),
+		ChannelBaseUrl:        common.GetContextKeyString(c, constant.ContextKeyChannelBaseUrl),
+		ChannelKey:            common.GetContextKeyString(c, constant.ContextKeyChannelKey),
+		ChannelOrganization:   common.GetContextKeyString(c, constant.ContextKeyChannelOrganization),
+		ChannelParamOverride:  common.GetContextKeyStringMap(c, constant.ContextKeyChannelParamOverride),
 		ChannelHeaderOverride: common.GetContextKeyStringMap(c, constant.ContextKeyChannelHeaderOverride),
 		ChannelAutoBan:        common.GetContextKeyBool(c, constant.ContextKeyChannelAutoBan),
 		ChannelModelMapping:   common.GetContextKeyString(c, constant.ContextKeyChannelModelMapping),
@@ -255,7 +260,7 @@ func executeAsyncRelayTask(task *model.Task, spec asyncRelayTaskSpec, snap async
 	task.UpdatedAt = now
 	_ = task.Update()
 
-	respStatus, respBody, respContentType := runRelayAndCapture(spec, snap, snap.RequestBody, snap.RequestHeaders)
+	respStatus, respBody, respContentType, respHeaders := runRelayAndCapture(spec, snap, snap.RequestBody, snap.RequestHeaders)
 
 	// Stream-only upstream fallback for chat.completions:
 	// - If upstream responds with SSE when we requested non-stream
@@ -265,7 +270,7 @@ func executeAsyncRelayTask(task *model.Task, spec asyncRelayTaskSpec, snap async
 			streamHeaders := cloneHeader(snap.RequestHeaders)
 			// Some upstreams require this Accept to return SSE.
 			streamHeaders.Set("Accept", "text/event-stream")
-			s2, b2, ct2 := runRelayAndCapture(spec, snap, snap.StreamFallbackBody, streamHeaders)
+			s2, b2, ct2, h2 := runRelayAndCapture(spec, snap, snap.StreamFallbackBody, streamHeaders)
 			if isEventStreamContentType(ct2) || looksLikeSSE(b2) {
 				if finalJSON, ok := sseChatCompletionsToFinalJSON(b2, snap.OriginalModel); ok {
 					respStatus = http.StatusOK
@@ -279,6 +284,7 @@ func executeAsyncRelayTask(task *model.Task, spec asyncRelayTaskSpec, snap async
 				respStatus = s2
 				respBody = b2
 			}
+			respHeaders = h2
 		}
 	}
 
@@ -294,6 +300,24 @@ func executeAsyncRelayTask(task *model.Task, spec asyncRelayTaskSpec, snap async
 	task.ResponseStatusCode = respStatus
 	task.Data = append([]byte(nil), respBody...)
 	task.Progress = "100%"
+	if task.Properties == (model.Properties{}) {
+		task.Properties = model.Properties{}
+	}
+	task.Properties.HttpStatus = respStatus
+	if reqID := strings.TrimSpace(respHeaders.Get("X-Oneapi-Request-Id")); reqID != "" {
+		task.Properties.RequestID = reqID
+	}
+	if oaiErr := extractOpenAIError(respBody); oaiErr != nil {
+		task.Properties.ErrorType = oaiErr.Type
+		switch v := oaiErr.Code.(type) {
+		case string:
+			task.Properties.ErrorCode = v
+		default:
+			if oaiErr.Code != nil {
+				task.Properties.ErrorCode = fmt.Sprintf("%v", oaiErr.Code)
+			}
+		}
+	}
 
 	if respStatus >= 200 && respStatus < 300 {
 		task.Status = model.TaskStatusSuccess
@@ -301,10 +325,20 @@ func executeAsyncRelayTask(task *model.Task, spec asyncRelayTaskSpec, snap async
 	} else {
 		task.Status = model.TaskStatusFailure
 		task.FailReason = extractOpenAIErrorMessage(respBody)
+		// Provide more actionable failure reason for ops/admin logs.
+		if task.FailReason == "" || task.FailReason == string(types.ErrorTypeOpenAIError) || task.FailReason == "openai_error" {
+			if task.Properties.ErrorType != "" || task.Properties.ErrorCode != "" {
+				task.FailReason = fmt.Sprintf("%s/%s", task.Properties.ErrorType, task.Properties.ErrorCode)
+			}
+		}
 		if task.FailReason == "" {
 			task.FailReason = http.StatusText(respStatus)
 		}
-		logger.LogWarn(context.Background(), fmt.Sprintf("async relay task failed, task_id=%s, status=%d, reason=%s", task.TaskID, respStatus, task.FailReason))
+		if task.Properties.RequestID != "" {
+			logger.LogWarn(context.Background(), fmt.Sprintf("async relay task failed, task_id=%s, request_id=%s, status=%d, reason=%s", task.TaskID, task.Properties.RequestID, respStatus, task.FailReason))
+		} else {
+			logger.LogWarn(context.Background(), fmt.Sprintf("async relay task failed, task_id=%s, status=%d, reason=%s", task.TaskID, respStatus, task.FailReason))
+		}
 	}
 
 	_ = task.Update()
@@ -371,6 +405,19 @@ func cloneHeader(h http.Header) http.Header {
 	return out
 }
 
+func extractOpenAIError(body []byte) *types.OpenAIError {
+	var wrapped struct {
+		Error types.OpenAIError `json:"error"`
+	}
+	if err := common.Unmarshal(body, &wrapped); err != nil {
+		return nil
+	}
+	if wrapped.Error.Message == "" && wrapped.Error.Type == "" && wrapped.Error.Code == nil {
+		return nil
+	}
+	return &wrapped.Error
+}
+
 func extractOpenAIErrorMessage(body []byte) string {
 	var wrapped struct {
 		Error struct {
@@ -381,6 +428,35 @@ func extractOpenAIErrorMessage(body []byte) string {
 		return ""
 	}
 	return wrapped.Error.Message
+}
+
+func extractInputForTask(spec asyncRelayTaskSpec, body []byte) string {
+	// Best-effort extraction for admin visibility; keep it short and avoid huge payloads.
+	var m map[string]any
+	if err := common.Unmarshal(body, &m); err != nil {
+		return ""
+	}
+	// Prefer prompt for image endpoints and chat message content for chat.
+	if v, ok := m["prompt"].(string); ok {
+		return truncateString(v, 200)
+	}
+	if spec.TargetPath == "/v1/chat/completions" {
+		if msgs, ok := m["messages"].([]any); ok && len(msgs) > 0 {
+			if last, ok := msgs[len(msgs)-1].(map[string]any); ok {
+				if content, ok := last["content"].(string); ok {
+					return truncateString(content, 200)
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func truncateString(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	return s[:max]
 }
 
 func normalizeAsyncChatBody(body []byte) (nonStream []byte, stream []byte, changed bool, err error) {
@@ -430,7 +506,7 @@ func failAsyncRelayTask(task *model.Task, statusCode int, reason string) {
 	_ = task.Update()
 }
 
-func runRelayAndCapture(spec asyncRelayTaskSpec, snap asyncRelayTaskContext, body []byte, headers http.Header) (status int, respBody []byte, contentType string) {
+func runRelayAndCapture(spec asyncRelayTaskSpec, snap asyncRelayTaskContext, body []byte, headers http.Header) (status int, respBody []byte, contentType string, respHeaders http.Header) {
 	rec := httptest.NewRecorder()
 	bg, _ := gin.CreateTestContext(rec)
 
@@ -473,7 +549,7 @@ func runRelayAndCapture(spec asyncRelayTaskSpec, snap asyncRelayTaskContext, bod
 	common.SetContextKey(bg, constant.ContextKeyUserSetting, snap.UserSetting)
 
 	if snap.ChannelId == 0 || snap.ChannelKey == "" {
-		return http.StatusServiceUnavailable, []byte(`{"error":{"message":"invalid_channel_context","type":"upstream_error"}}`), "application/json"
+		return http.StatusServiceUnavailable, []byte(`{"error":{"message":"invalid_channel_context","type":"upstream_error"}}`), "application/json", http.Header{}
 	}
 
 	common.SetContextKey(bg, constant.ContextKeyOriginalModel, snap.OriginalModel)
@@ -513,11 +589,11 @@ func runRelayAndCapture(spec asyncRelayTaskSpec, snap asyncRelayTaskContext, bod
 
 	if ctx.Err() != nil {
 		// Timeout or cancel at async task layer (best-effort mapping).
-		return http.StatusGatewayTimeout, []byte(`{"error":{"message":"async_task_timeout","type":"upstream_error"}}`), "application/json"
+		return http.StatusGatewayTimeout, []byte(`{"error":{"message":"async_task_timeout","type":"upstream_error"}}`), "application/json", rec.Header()
 	}
 
 	contentType = rec.Header().Get("Content-Type")
-	return rec.Code, rec.Body.Bytes(), contentType
+	return rec.Code, rec.Body.Bytes(), contentType, rec.Header()
 }
 
 func isEventStreamContentType(ct string) bool {

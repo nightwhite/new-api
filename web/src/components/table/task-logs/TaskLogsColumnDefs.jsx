@@ -33,6 +33,8 @@ import {
   Hash,
   Video,
   Sparkles,
+  Image,
+  MessageSquare,
 } from 'lucide-react';
 import {
   TASK_ACTION_FIRST_TAIL_GENERATE,
@@ -132,6 +134,28 @@ const renderType = (type, t) => {
           {t('视频Remix')}
         </Tag>
       );
+    case 'chat.completions':
+      return (
+        <Tag
+          color='indigo'
+          shape='circle'
+          prefixIcon={<MessageSquare size={14} />}
+        >
+          {t('对话')}
+        </Tag>
+      );
+    case 'images.generations':
+      return (
+        <Tag color='blue' shape='circle' prefixIcon={<Image size={14} />}>
+          {t('生图')}
+        </Tag>
+      );
+    case 'images.edits':
+      return (
+        <Tag color='cyan' shape='circle' prefixIcon={<Image size={14} />}>
+          {t('图片编辑')}
+        </Tag>
+      );
     default:
       return (
         <Tag color='white' shape='circle' prefixIcon={<HelpCircle size={14} />}>
@@ -157,6 +181,12 @@ const renderPlatform = (platform, t) => {
       return (
         <Tag color='green' shape='circle' prefixIcon={<Music size={14} />}>
           Suno
+        </Tag>
+      );
+    case 'async_relay':
+      return (
+        <Tag color='violet' shape='circle' prefixIcon={<Sparkles size={14} />}>
+          {t('异步转发')}
         </Tag>
       );
     default:

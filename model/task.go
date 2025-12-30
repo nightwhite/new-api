@@ -58,9 +58,9 @@ type Task struct {
 	Progress   string                `json:"progress" gorm:"type:varchar(20);index"`
 	Properties Properties            `json:"properties" gorm:"type:json"`
 	// 禁止返回给用户，内部可能包含key等隐私信息
-	PrivateData TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
-	ResponseStatusCode int `json:"-" gorm:"default:0"`
-	Data        json.RawMessage `json:"data" gorm:"type:json"`
+	PrivateData        TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
+	ResponseStatusCode int             `json:"-" gorm:"default:0"`
+	Data               json.RawMessage `json:"data" gorm:"type:json"`
 }
 
 func (t *Task) SetData(data any) {
@@ -77,6 +77,11 @@ type Properties struct {
 	Input             string `json:"input"`
 	UpstreamModelName string `json:"upstream_model_name,omitempty"`
 	OriginModelName   string `json:"origin_model_name,omitempty"`
+	RequestPath       string `json:"request_path,omitempty"`
+	RequestID         string `json:"request_id,omitempty"`
+	HttpStatus        int    `json:"http_status,omitempty"`
+	ErrorType         string `json:"error_type,omitempty"`
+	ErrorCode         string `json:"error_code,omitempty"`
 }
 
 func (m *Properties) Scan(val interface{}) error {
