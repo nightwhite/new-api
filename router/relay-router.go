@@ -179,6 +179,21 @@ func SetRelayRouter(router *gin.Engine) {
 			controller.Relay(c, types.RelayFormatGemini)
 		})
 	}
+
+	asyncRouter := router.Group("/async")
+	asyncRouter.Use(middleware.TokenAuth())
+	asyncRouter.Use(middleware.ModelRequestRateLimit())
+	{
+		asyncCreateRouter := asyncRouter.Group("/v1")
+		asyncCreateRouter.Use(middleware.Distribute())
+		{
+			asyncCreateRouter.POST("/chat/completions", controller.AsyncRelayChatCompletions)
+			asyncCreateRouter.POST("/images/generations", controller.AsyncRelayImagesGenerations)
+			asyncCreateRouter.POST("/images/edits", controller.AsyncRelayImagesEdits)
+		}
+
+		asyncRouter.GET("/tasks/:task_id", controller.AsyncRelayTaskResult)
+	}
 }
 
 func registerMjRouterGroup(relayMjRouter *gin.RouterGroup) {

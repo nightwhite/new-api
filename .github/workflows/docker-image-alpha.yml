@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - alpha
+      - night
   workflow_dispatch:
     inputs:
       name:
@@ -36,10 +37,15 @@ jobs:
       - name: Determine alpha version
         id: version
         run: |
-          VERSION="alpha-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          VERSION_PREFIX="alpha"
+          if [ "${GITHUB_REF_NAME}" = "night" ]; then
+            VERSION_PREFIX="night"
+          fi
+          VERSION="${VERSION_PREFIX}-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
           echo "$VERSION" > VERSION
           echo "value=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION_PREFIX=$VERSION_PREFIX" >> $GITHUB_ENV
           echo "Publishing version: $VERSION for ${{ matrix.arch }}"
 
       - name: Normalize GHCR repository
@@ -47,12 +53,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -66,19 +66,16 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            calciumion/new-api
             ghcr.io/${{ env.GHCR_REPOSITORY }}
 
-      - name: Build & push single-arch (to both registries)
+      - name: Build & push single-arch (GHCR)
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            calciumion/new-api:alpha-${{ matrix.arch }}
-            calciumion/new-api:${{ steps.version.outputs.value }}-${{ matrix.arch }}
-            ghcr.io/${{ env.GHCR_REPOSITORY }}:alpha-${{ matrix.arch }}
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ env.VERSION_PREFIX }}-${{ matrix.arch }}
             ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ steps.version.outputs.value }}-${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -87,7 +84,7 @@ jobs:
           sbom: false
 
   create_manifests:
-    name: Create multi-arch manifests (Docker Hub + GHCR)
+    name: Create multi-arch manifests (GHCR)
     needs: [build_single_arch]
     runs-on: ubuntu-latest
     permissions:
@@ -105,29 +102,14 @@ jobs:
       - name: Determine alpha version
         id: version
         run: |
-          VERSION="alpha-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          VERSION_PREFIX="alpha"
+          if [ "${GITHUB_REF_NAME}" = "night" ]; then
+            VERSION_PREFIX="night"
+          fi
+          VERSION="${VERSION_PREFIX}-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
           echo "value=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Create & push manifest (Docker Hub - alpha)
-        run: |
-          docker buildx imagetools create \
-            -t calciumion/new-api:alpha \
-            calciumion/new-api:alpha-amd64 \
-            calciumion/new-api:alpha-arm64
-
-      - name: Create & push manifest (Docker Hub - versioned alpha)
-        run: |
-          docker buildx imagetools create \
-            -t calciumion/new-api:${VERSION} \
-            calciumion/new-api:${VERSION}-amd64 \
-            calciumion/new-api:${VERSION}-arm64
+          echo "VERSION_PREFIX=$VERSION_PREFIX" >> $GITHUB_ENV
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -136,12 +118,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create & push manifest (GHCR - alpha)
+      - name: Create & push manifest (GHCR - prefix)
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/${GHCR_REPOSITORY}:alpha \
-            ghcr.io/${GHCR_REPOSITORY}:alpha-amd64 \
-            ghcr.io/${GHCR_REPOSITORY}:alpha-arm64
+            -t ghcr.io/${GHCR_REPOSITORY}:${VERSION_PREFIX} \
+            ghcr.io/${GHCR_REPOSITORY}:${VERSION_PREFIX}-amd64 \
+            ghcr.io/${GHCR_REPOSITORY}:${VERSION_PREFIX}-arm64
 
       - name: Create & push manifest (GHCR - versioned alpha)
         run: |

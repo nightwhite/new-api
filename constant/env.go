@@ -17,6 +17,8 @@ var NotificationLimitDurationMinute int
 var GenerateDefaultToken bool
 var ErrorLogEnabled bool
 var TaskQueryLimit int
+var AsyncTaskTimeoutSeconds int
+var AsyncTaskMaxResponseMB int
 
 // temporary variable for sora patch, will be removed in future
 var TaskPricePatches []string

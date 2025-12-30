@@ -135,6 +135,10 @@ func initConstantEnv() {
 	constant.ErrorLogEnabled = GetEnvOrDefaultBool("ERROR_LOG_ENABLED", false)
 	// 任务轮询时查询的最大数量
 	constant.TaskQueryLimit = GetEnvOrDefault("TASK_QUERY_LIMIT", 1000)
+	// async 本地任务执行超时时间（秒）
+	constant.AsyncTaskTimeoutSeconds = GetEnvOrDefault("ASYNC_TASK_TIMEOUT_SECONDS", 600)
+	// async 本地任务最大响应体大小（MB），避免落库过大导致 DB/内存问题
+	constant.AsyncTaskMaxResponseMB = GetEnvOrDefault("ASYNC_TASK_MAX_RESPONSE_MB", 32)
 
 	soraPatchStr := GetEnvOrDefaultString("TASK_PRICE_PATCH", "")
 	if soraPatchStr != "" {

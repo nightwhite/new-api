@@ -59,6 +59,7 @@ type Task struct {
 	Properties Properties            `json:"properties" gorm:"type:json"`
 	// 禁止返回给用户，内部可能包含key等隐私信息
 	PrivateData TaskPrivateData `json:"-" gorm:"column:private_data;type:json"`
+	ResponseStatusCode int `json:"-" gorm:"default:0"`
 	Data        json.RawMessage `json:"data" gorm:"type:json"`
 }
 
@@ -240,7 +241,13 @@ func GetAllUnFinishSyncTasks(limit int) []*Task {
 	var tasks []*Task
 	var err error
 	// get all tasks progress is not 100%
-	err = DB.Where("progress != ?", "100%").Where("status != ?", TaskStatusFailure).Where("status != ?", TaskStatusSuccess).Limit(limit).Order("id").Find(&tasks).Error
+	err = DB.Where("progress != ?", "100%").
+		Where("status != ?", TaskStatusFailure).
+		Where("status != ?", TaskStatusSuccess).
+		Where("platform != ?", constant.TaskPlatformAsyncRelay).
+		Limit(limit).
+		Order("id").
+		Find(&tasks).Error
 	if err != nil {
 		return nil
 	}
